@@ -20,19 +20,22 @@ endif
 ifdef RELEASE_GOOGLE_COMET_RADIOCFG_DIR
 RELEASE_GOOGLE_PRODUCT_RADIOCFG_DIR := $(RELEASE_GOOGLE_COMET_RADIOCFG_DIR)
 endif
-RELEASE_GOOGLE_BOOTLOADER_COMET_DIR ?= 24D1# Keep this for pdk TODO: b/327119000
+RELEASE_GOOGLE_BOOTLOADER_COMET_DIR ?= 24Q3-12386881# Keep this for pdk TODO: b/327119000
 RELEASE_GOOGLE_PRODUCT_BOOTLOADER_DIR := bootloader/$(RELEASE_GOOGLE_BOOTLOADER_COMET_DIR)
 $(call soong_config_set,comet_bootloader,prebuilt_dir,$(RELEASE_GOOGLE_BOOTLOADER_COMET_DIR))
 
+TARGET_LINUX_KERNEL_VERSION ?= 6.1
 ifdef RELEASE_KERNEL_COMET_DIR
 TARGET_KERNEL_DIR ?= $(RELEASE_KERNEL_COMET_DIR)
 TARGET_BOARD_KERNEL_HEADERS ?= $(RELEASE_KERNEL_COMET_DIR)/kernel-headers
 else
-TARGET_KERNEL_DIR ?= device/google/comet-kernels/6.1/24D1
-TARGET_BOARD_KERNEL_HEADERS ?= device/google/comet-kernels/6.1/24D1/kernel-headers
+TARGET_KERNEL_DIR ?= device/google/comet-kernels/6.1/24Q3-12386881
+TARGET_BOARD_KERNEL_HEADERS ?= device/google/comet-kernels/6.1/24Q3-12386881/kernel-headers
 endif
 
 TARGET_RECOVERY_DEFAULT_ROTATION := ROTATION_RIGHT
+
+LOCAL_PATH := device/google/comet
 
 ifneq (,$(filter userdebug eng, $(TARGET_BUILD_VARIANT)))
     USE_UWBFIELDTESTQM := true
@@ -66,8 +69,15 @@ include device/google/gs-common/touch/gti/predump_gti_dual.mk
 include device/google/gs-common/display/dump_second_display.mk
 
 # Increment the SVN for any official public releases
+ifdef RELEASE_SVN_COMET
+TARGET_SVN ?= $(RELEASE_SVN_COMET)
+else
+# Set this for older releases that don't use build flag
+TARGET_SVN ?= 04
+endif
+
 PRODUCT_VENDOR_PROPERTIES += \
-    ro.vendor.build.svn=5
+    ro.vendor.build.svn=$(TARGET_SVN)
 
 # go/lyric-soong-variables
 $(call soong_config_set,lyric,camera_hardware,comet)
@@ -93,7 +103,7 @@ PRODUCT_COPY_FILES += \
         device/google/comet/comet/panel_config_google-ct3e_cal1.pb:$(TARGET_COPY_OUT_VENDOR)/etc/panel_config_google-ct3e_cal1.pb
 
 ifeq ($(filter factory_comet, $(TARGET_PRODUCT)),)
-PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.vendor.primarydisplay.xrr.version=2.1@202504:1.2@202404
+PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.vendor.primarydisplay.xrr.version=2.1
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.vendor.primarydisplay.blocking_zone.min_refresh_rate_by_nits=20:120,30:60,:1
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.vendor.primarydisplay.vrr.expected_present.headsup_ns=30000000
 PRODUCT_DEFAULT_PROPERTY_OVERRIDES += ro.vendor.primarydisplay.vrr.expected_present.timeout_ns=500000000
@@ -209,6 +219,10 @@ PRODUCT_PACKAGES_DEBUG += \
 PRODUCT_PACKAGES_DEBUG += \
     ewp_tool
 
+# Bluetotoh Auto On feature
+PRODUCT_PRODUCT_PROPERTIES +=\
+    bluetooth.server.automatic_turn_on=true
+
 # Bluetooth AAC VBR
 PRODUCT_PRODUCT_PROPERTIES += \
     persist.bluetooth.a2dp_aac.vbr_supported=true
@@ -250,6 +264,13 @@ endif
 # Audio CCA property
 PRODUCT_PROPERTY_OVERRIDES += \
 	persist.vendor.audio.cca.enabled=false
+
+# HdMic Audio
+PRODUCT_SOONG_NAMESPACES += device/google/comet/audio/comet/prebuilt/libspeechenhancer
+PRODUCT_PROPERTY_OVERRIDES += \
+    persist.vendor.app.audio.gsenet.version=1
+PRODUCT_PACKAGES += \
+    libspeechenhancer
 
 # Keymaster HAL
 #LOCAL_KEYMASTER_PRODUCT_PACKAGE ?= android.hardware.keymaster@4.1-service
@@ -313,6 +334,8 @@ PRODUCT_SOONG_NAMESPACES += \
 
 # Location
 PRODUCT_SOONG_NAMESPACES += device/google/comet/location
+# For GPS property
+PRODUCT_VENDOR_PROPERTIES += ro.vendor.gps.pps.enabled=true
 $(call soong_config_set, gpssdk, buildtype, $(TARGET_BUILD_VARIANT))
 PRODUCT_PACKAGES += gps.cfg
 
@@ -344,6 +367,9 @@ PRODUCT_VENDOR_PROPERTIES += \
 PRODUCT_VENDOR_PROPERTIES += \
     persist.vendor.camera.exif_reveal_make_model=true
 
+# Media Performance Class 14
+PRODUCT_PRODUCT_PROPERTIES += ro.odm.build.media_performance_class=34
+
 # OIS with system imu
 PRODUCT_VENDOR_PROPERTIES += \
     persist.vendor.camera.ois_with_system_imu=true
@@ -353,6 +379,7 @@ PRODUCT_VENDOR_PROPERTIES += \
 # remove ro.vendor.vibrator.hal.dbc.enable (needed for setting pm.activetimeout)
 # remove pm.activetimeout
 # ro.vendor.vibrator.hal.loc.coeff.folded currently unused
+$(call soong_config_set,haptics,kernel_ver,v$(subst .,_,$(TARGET_LINUX_KERNEL_VERSION)))
 ACTUATOR_MODEL := luxshare_ict_081545
 ADAPTIVE_HAPTICS_FEATURE := adaptive_haptics_v1
 PRODUCT_VENDOR_PROPERTIES += \
@@ -388,6 +415,12 @@ PRODUCT_PRODUCT_PROPERTIES += \
         bluetooth.profile.ccp.server.enabled=true \
         bluetooth.profile.vcp.controller.enabled=true
 
+ifeq ($(RELEASE_PIXEL_BROADCAST_ENABLED), true)
+PRODUCT_PRODUCT_PROPERTIES += \
+	bluetooth.profile.bap.broadcast.assist.enabled=true \
+	bluetooth.profile.bap.broadcast.source.enabled=true
+endif
+
 # LE Audio switcher in developer options
 PRODUCT_PRODUCT_PROPERTIES += \
         ro.bluetooth.leaudio_switcher.supported=true \
@@ -418,6 +451,10 @@ PRODUCT_PRODUCT_PROPERTIES += \
 PRODUCT_PRODUCT_PROPERTIES += \
     persist.bluetooth.leaudio.allow_list=SM-R510
 
+# Telephony Satellite Feature
+PRODUCT_COPY_FILES += \
+    frameworks/native/data/etc/android.hardware.telephony.satellite.xml:$(TARGET_COPY_OUT_PRODUCT)/etc/permissions/android.hardware.telephony.satellite.xml
+
 # Battery Mitigation Config
 ifeq (,$(TARGET_VENDOR_BATTERY_MITIGATION_CONFIG_PATH))
 TARGET_VENDOR_BATTERY_MITIGATION_CONFIG_PATH := device/google/comet/battery_mitigation
@@ -438,6 +475,9 @@ endif
 # Connectivity Resources Overlay
 PRODUCT_PACKAGES += \
     ConnectivityResourcesOverlayCometOverride
+
+PRODUCT_PRODUCT_PROPERTIES += \
+    persist.bluetooth.thread_dispatcher.enabled=true
 
 # Camera concurrent foldable dual front feature support
 PRODUCT_PACKAGES += \
